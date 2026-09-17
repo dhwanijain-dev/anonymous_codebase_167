@@ -5,8 +5,8 @@ import { Button } from "@/components/ui/button"
 import { RiAddLine, RiArrowUpLine, RiCheckboxCircleFill, RiCloseLine, RiDownloadLine, RiEarthLine, RiFileImageLine, RiLoader4Line, RiMore2Line, RiSparkling2Line, RiUploadCloud2Line, RiUser3Line } from "@remixicon/react"
 
 type Box = [number, number, number, number]
-type AnalysisResponse = { request_id: string; answer: string | null; tasks: Array<{ task: string; result: { answer: string; caption?: string | null; boxes?: Box[]; latency_seconds?: number }; model: Record<string, unknown> }>; execution_trace: { total_latency_seconds: number; selected_tasks: string[]; workflow: string[] } }
-type Message = { role: "user" | "assistant"; text: string; files?: File[]; result?: AnalysisResponse }
+type AnalysisResponse = { request_id: string; answer: string | null; tasks: Array<{ task: string; result: { answer: string; caption?: string | null; boxes?: Box[]; evidence_image?: string | null; is_grounding?: boolean; latency_seconds?: number }; model: Record<string, unknown> }>; execution_trace: { total_latency_seconds: number; selected_tasks: string[]; workflow: string[] } }
+type Message = { role: "user" | "assistant"; text: string; files?: File[]; previews?: string[]; result?: AnalysisResponse }
 
 const starterPrompts = ["Where are the vehicles in this image?", "How many buildings can you see?", "Describe the important features in this scene."]
 
@@ -33,15 +33,15 @@ export default function Page() {
     event?.preventDefault()
     if (busy || !prompt.trim()) return
     if (!files.length) return setError("Attach an image before sending your question.")
-    const currentPrompt = prompt.trim(); const currentFiles = files
-    setMessages((current) => [...current, { role: "user", text: currentPrompt, files: currentFiles }])
+    const currentPrompt = prompt.trim(); const currentFiles = files; const previews = currentFiles.map((file) => URL.createObjectURL(file))
+    setMessages((current) => [...current, { role: "user", text: currentPrompt, files: currentFiles, previews }])
     setPrompt(""); setFiles([]); setError(""); setBusy(true)
     try {
       const form = new FormData(); form.append("query", currentPrompt); form.append("modalities", currentFiles.length === 2 ? "unknown,pair" : "unknown")
       currentFiles.forEach((file, index) => form.append(index === 0 ? "image1" : "image2", file, file.name))
       const response = await fetch("/api/backend/analyze", { method: "POST", body: form }); const body = await response.json()
       if (!response.ok) throw new Error(body.detail ?? "The analysis could not be completed.")
-      setMessages((current) => [...current, { role: "assistant", text: body.answer ?? "No answer was returned.", result: body }])
+      setMessages((current) => [...current, { role: "assistant", text: body.answer ?? "No answer was returned.", files: currentFiles, previews, result: body }])
     } catch (caught) { setError(caught instanceof Error ? caught.message : "Could not reach the SatQuery backend.") } finally { setBusy(false) }
   }
 
@@ -59,5 +59,5 @@ function Welcome({ onPrompt }: { onPrompt: (prompt: string) => void }) { return 
 function ChatMessage({ message }: { message: Message }) {
   const grounding = message.result?.tasks.find((task) => task.task === "GROUNDING_CAPTIONING")?.result
   const boxes = grounding?.boxes ?? []
-  return <div className={`message-row ${message.role === "user" ? "user-row" : ""}`}><div className={`avatar ${message.role === "user" ? "user-avatar" : "assistant-avatar"}`}>{message.role === "user" ? <RiUser3Line size={16} /> : <RiSparkling2Line size={16} />}</div><div className="message-content"><div className="message-name">{message.role === "user" ? "You" : "SatQuery"}</div>{message.files?.length ? <div className="message-images">{message.files.map((file) => <img key={file.name} src={URL.createObjectURL(file)} alt={file.name} />)}</div> : null}<div className={message.role === "user" ? "user-bubble" : "assistant-text"}>{message.text}</div>{grounding ? <div className="evidence-card"><div className="evidence-heading"><span><RiCheckboxCircleFill size={15} /> Grounding evidence</span><span>{boxes.length} region{boxes.length === 1 ? "" : "s"} marked</span></div><div className="evidence-image"><img src={message.files?.[0] ? URL.createObjectURL(message.files[0]) : ""} alt="Grounding evidence" />{boxes.map((box, index) => <div key={index} className="grounding-box" style={{ left: `${box[0] * 100}%`, top: `${box[1] * 100}%`, width: `${(box[2] - box[0]) * 100}%`, height: `${(box[3] - box[1]) * 100}%` }}><span>{index + 1}</span></div>)}</div>{grounding.caption && <div className="evidence-caption"><span className="eyebrow">Caption</span><p>{grounding.caption}</p></div>}<Button variant="outline" size="sm" className="mt-3" onClick={() => window.open(`data:application/json,${encodeURIComponent(JSON.stringify(message.result, null, 2))}`, "_blank")}><RiDownloadLine size={14} /> Export evidence</Button></div> : null}</div></div>
+  return <div className={`message-row ${message.role === "user" ? "user-row" : ""}`}><div className={`avatar ${message.role === "user" ? "user-avatar" : "assistant-avatar"}`}>{message.role === "user" ? <RiUser3Line size={16} /> : <RiSparkling2Line size={16} />}</div><div className="message-content"><div className="message-name">{message.role === "user" ? "You" : "SatQuery"}</div><div className={message.role === "user" ? "user-bubble" : "assistant-text"}>{message.text}</div>{grounding?.is_grounding && (grounding.evidence_image || message.previews?.[0]) ? <div className="evidence-card"><div className="evidence-heading"><span><RiCheckboxCircleFill size={15} /> Grounding evidence</span><span>{boxes.length} region{boxes.length === 1 ? "" : "s"} marked</span></div><div className="evidence-image"><img src={grounding.evidence_image ?? message.previews![0]} alt="Grounding evidence" />{boxes.map((box, index) => <div key={index} className="grounding-box" style={{ left: `${box[0] * 100}%`, top: `${box[1] * 100}%`, width: `${(box[2] - box[0]) * 100}%`, height: `${(box[3] - box[1]) * 100}%` }}><span>{index + 1}</span></div>)}</div>{grounding.caption && <div className="evidence-caption"><span className="eyebrow">Caption</span><p>{grounding.caption}</p></div>}<Button variant="outline" size="sm" className="mt-3" onClick={() => window.open(`data:application/json,${encodeURIComponent(JSON.stringify(message.result, null, 2))}`, "_blank")}><RiDownloadLine size={14} /> Export evidence</Button></div> : null}</div></div>
 }

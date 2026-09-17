@@ -3,11 +3,14 @@ import time
 import uuid
 import argparse
 import json
+import logging
 from pathlib import Path
 from typing import List
 from dotenv import load_dotenv
 
 load_dotenv()
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
+logger = logging.getLogger("satquery.api")
 
 from fastapi import (
     FastAPI,
@@ -164,6 +167,8 @@ async def analyze(
     ),
 ):
 
+    logger.info("analysis_request_received query=%r modalities=%s", query, modalities)
+
     images = [image1]
     if image2 is not None:
         images.append(image2)
@@ -269,6 +274,8 @@ async def analyze(
             }
         )
 
+    logger.info("analysis_inputs_validated images=%s metadata=%s", len(decoded_images), image_metadata)
+
 
     # ========================================================
     # SUPERVISOR
@@ -294,6 +301,13 @@ async def analyze(
         query=query,
 
         input_info=supervisor_input,
+    )
+
+    logger.info(
+        "supervisor_decision classes=%s workflow=%s parameters=%s",
+        decision.classes,
+        decision.workflow,
+        decision.parameters,
     )
 
 
@@ -349,7 +363,11 @@ async def analyze(
         images=decoded_images,
 
         query=query,
+
+        grounding_requested=decision.parameters.get("intent") == "grounding",
     )
+
+    logger.info("analysis_completed request_id=%s tasks=%s", request_id, [task["task"] for task in execution["outputs"]])
 
 
     total_latency = (
@@ -433,12 +451,20 @@ async def analyze(
     first_answer = None
 
     if execution["outputs"]:
-
-        first_answer = (
-            execution["outputs"][0]
-            ["result"]
-            ["answer"]
-        )
+        answers = [
+            task["result"]["answer"]
+            for task in execution["outputs"]
+            if task["result"].get("answer")
+        ]
+        if len(answers) > 1 and decision.parameters.get("combine_outputs"):
+            first_answer = (
+                "Visual analysis:\n"
+                f"{answers[0].strip()}\n\n"
+                "Scene caption:\n"
+                f"{answers[1].strip()}"
+            )
+        elif answers:
+            first_answer = answers[0]
 
 
     return {
@@ -482,6 +508,7 @@ def run_cli_analysis(image_paths: List[str], query: str, modalities: str):
         classes=decision.classes,
         images=decoded_images,
         query=query,
+        grounding_requested=decision.parameters.get("intent") == "grounding",
     )
 
     return {

@@ -273,11 +273,11 @@
     }
 
     .evidence-image {
-      @apply relative overflow-hidden rounded-xl bg-[#b9c9b8];
+      @apply relative aspect-square w-full max-w-[512px] overflow-hidden rounded-xl bg-[#b9c9b8];
     }
 
     .evidence-image img {
-      @apply block max-h-[430px] w-full object-contain;
+      @apply block h-full w-full object-contain;
     }
 
     .evidence-caption {
