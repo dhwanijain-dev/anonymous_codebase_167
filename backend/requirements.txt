@@ -1,0 +1,27 @@
+# requirements.txt
+
+fastapi
+uvicorn[standard]
+python-multipart
+
+# Hugging Face / VLM
+transformers
+torch
+accelerate
+bitsandbytes
+peft
+huggingface_hub
+qwen-vl-utils
+unsloth
+
+# Images / GeoTIFF
+pillow
+numpy
+rasterio
+
+# Ollama
+requests
+
+# Validation
+pydantic
+python-dotenv
