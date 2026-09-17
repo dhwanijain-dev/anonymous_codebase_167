@@ -25,3 +25,7 @@ requests
 # Validation
 pydantic
 python-dotenv
+
+torchvision
+sentence-transformers
+safetensors
