@@ -133,7 +133,7 @@
 
   @layer components {
     .chat-shell {
-      @apply flex min-h-svh flex-col bg-[#f5f7f3] text-[#18221f];
+      @apply flex min-h-svh flex-col bg-[#f5f7f3] text-[#18221f] motion-safe:animate-[fade-in_400ms_ease-out];
     }
 
     .chat-header {
@@ -161,7 +161,7 @@
     }
 
     .prompt-suggestion {
-      @apply rounded-xl border border-[#dce4dc] bg-[#fbfcf9] px-3 py-3 text-left text-xs leading-5 text-[#718078] transition-colors hover:border-[#a8c7a5] hover:bg-[#eef6eb] hover:text-[#397352];
+      @apply rounded-xl border border-[#dce4dc] bg-[#fbfcf9] px-3 py-3 text-left text-xs leading-5 text-[#718078] transition-all duration-200 hover:-translate-y-0.5 hover:border-[#a8c7a5] hover:bg-[#eef6eb] hover:text-[#397352] hover:shadow-sm;
     }
 
     .message-row {
@@ -200,6 +200,14 @@
       @apply rounded-2xl rounded-tr-sm bg-[#183d35] px-4 py-3 text-sm leading-6 text-white;
     }
 
+    .sent-image-preview {
+      @apply mb-2 flex max-w-full gap-2 overflow-hidden rounded-xl border border-[#cbd9cc] bg-[#eaf2e6] p-1.5 shadow-sm motion-safe:animate-[scale-in_180ms_ease-out];
+    }
+
+    .sent-image-preview img {
+      @apply size-24 rounded-lg object-cover;
+    }
+
     .assistant-text {
       @apply whitespace-pre-wrap text-sm leading-7 text-[#34443d];
     }
@@ -217,7 +225,7 @@
     }
 
     .composer {
-      @apply rounded-2xl border border-[#cbd9cc] bg-[#fbfcf9] p-3 shadow-[0_8px_30px_rgba(47,80,59,0.08)];
+      @apply rounded-2xl border border-[#cbd9cc] bg-[#fbfcf9] p-3 shadow-[0_8px_30px_rgba(47,80,59,0.08)] transition-all duration-200 focus-within:border-[#8db58e] focus-within:shadow-[0_10px_34px_rgba(47,80,59,0.13)];
     }
 
     .composer textarea {
@@ -226,6 +234,18 @@
 
     .composer-files {
       @apply flex flex-wrap gap-2;
+    }
+
+    .attachment-preview {
+      @apply relative grid size-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-[#cbd9cc] bg-[#eaf2e6] text-[#397352] shadow-sm transition-all duration-200 motion-safe:animate-[scale-in_180ms_ease-out] hover:-translate-y-0.5 hover:shadow-md;
+    }
+
+    .attachment-preview img {
+      @apply block h-full w-full object-cover;
+    }
+
+    .attachment-remove {
+      @apply absolute top-1 right-1 grid size-5 place-items-center rounded-full bg-[#183d35]/85 text-white shadow-sm transition-all duration-150 hover:scale-110 hover:bg-[#a04b3d] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#397352];
     }
 
     .file-chip {
@@ -241,7 +261,7 @@
     }
 
     .composer-icon {
-      @apply grid size-8 place-items-center rounded-lg text-[#718078] transition-colors hover:bg-[#eaf2e6] hover:text-[#397352];
+      @apply grid size-8 place-items-center rounded-lg text-[#718078] transition-all duration-200 hover:-translate-y-0.5 hover:bg-[#eaf2e6] hover:text-[#397352];
     }
 
     .status-dot {
@@ -258,6 +278,16 @@
 
     .typing span {
       @apply size-1.5 animate-pulse rounded-full bg-[#8aaa8b];
+    }
+
+    @keyframes fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes scale-in {
+      from { opacity: 0; transform: scale(0.88); }
+      to { opacity: 1; transform: scale(1); }
     }
 
     .evidence-card {

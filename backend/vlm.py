@@ -84,7 +84,7 @@ def extract_grounding_boxes(
     image_size: tuple[int, int] | None = None,
 ) -> List[List[float]]:
     """Extract boxes and normalize pixel coordinates when image dimensions exist."""
-    pattern = r"(?:\[|\()\s*([0-9]*\.?[0-9]+)\s*[,\s]+\s*([0-9]*\.?[0-9]+)\s*[,;]\s*([0-9]*\.?[0-9]+)\s*[,\s]+\s*([0-9]*\.?[0-9]+)\s*(?:\]|\))"
+    pattern = r"\[\s*([0-9]*\.?[0-9]+)\s*[,\s]+\s*([0-9]*\.?[0-9]+)\s*[,;]\s*([0-9]*\.?[0-9]+)\s*[,\s]+\s*([0-9]*\.?[0-9]+)\s*\]"
     boxes = []
     for match in re.findall(pattern, text):
         box = [max(0.0, min(1.0, float(value))) for value in match]
@@ -199,11 +199,9 @@ def run_vlm(
         You are a remote-sensing object-grounding specialist.
 
         Locate the object or objects requested by the user in the image.
-        Return exactly one line in this format first:
-        BBOXES: [[x_min, y_min, x_max, y_max], ...]
-        Coordinates must be normalized numbers between 0 and 1.
-        Then write one short sentence describing the located object.
-        Never omit the BBOXES line. If uncertain, return BBOXES: [].
+        Return normalized bounding boxes in this format:
+        [x_min y_min, x_max y_max]
+        where every coordinate is between 0 and 1.
 
         User request:
         {query}
@@ -424,11 +422,6 @@ def run_vlm(
         skip_special_tokens=True,
     )[0]
     generated_text = clean_generated_text(raw_generated_text)
-    logger.info(
-        "specialist_output workflow=%s text=%r",
-        workflow,
-        generated_text[:1000],
-    )
 
     grounding_boxes = extract_grounding_boxes(generated_text, images[0].size) if grounding_requested else []
 

@@ -134,7 +134,7 @@ async def classify_query(
 
         input_info=input_info,
     )
-
+    
     return {
 
         "query": query,

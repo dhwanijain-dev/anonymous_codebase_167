@@ -54,7 +54,7 @@ HF_MODEL_REPO3 = os.getenv(
 
 HF_MODEL_REPO4 = os.getenv(
     "HF_MODEL_REPO4",
-    "whrecker/qwen2.5-3b-vl-bigearthnet-sar-fusion-experiment",
+    "whrecker/qwen2.5-3b-vl-bigearthnet-txt-lora",
 )
 
 HF_TOKEN_BASE = os.getenv("HF_TOKEN_BASE") or os.getenv("HF_TOKEN") or os.getenv("HF_TOKEN1")
