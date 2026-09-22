@@ -648,7 +648,7 @@ def main():
     test_raw = torch.stack([raw_features[id_to_i[s.sample_id]] for s in test_samples])
 
     projector = StateProjector(image_dim=encoder.image_dim).to(args.device)
-    policy = DQN(projected_dim=projector.output_dim, device=args.device)
+    policy = DQN(state_dim=projector.output_dim, device=args.device)
     projector_opt = torch.optim.AdamW(projector.parameters(), lr=5e-4, weight_decay=1e-4)
 
     # --------------------------------------------

@@ -24,6 +24,7 @@ class SupervisorDecision(BaseModel):
     reasoning: Optional[str] = None
     workflow: List[str] = Field(default_factory=list)
     parameters: Dict[str, Any] = Field(default_factory=dict)
+    router: str = Field(default="keyword")  # "rl" or "keyword"
 
 
 CLASS_DESCRIPTIONS = {

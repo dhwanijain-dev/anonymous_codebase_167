@@ -4,6 +4,7 @@ import uuid
 import argparse
 import json
 import logging
+import tempfile
 from pathlib import Path
 from typing import List
 from dotenv import load_dotenv
@@ -21,6 +22,7 @@ from fastapi import (
 )
 
 from supervisor import call_groq_supervisor
+from rl_router import route_with_rl
 
 from image_validation import (
     validate_extension,
@@ -61,6 +63,11 @@ USE_4BIT = (
     == "true"
 )
 
+# Whether to use the trained RL router (True) or the keyword heuristic (False).
+# Set SATQUERY_USE_RL_ROUTER=false to force keyword routing even when a
+# checkpoint is present.
+USE_RL_ROUTER = os.getenv("SATQUERY_USE_RL_ROUTER", "true").lower() == "true"
+
 
 # ============================================================
 # FASTAPI
@@ -79,13 +86,20 @@ app = FastAPI(
 
 @app.get("/health")
 def health():
-
+    router_checkpoint = os.getenv(
+        "ROUTER_CHECKPOINT",
+        str(Path(__file__).parent / "satquery_router.pt"),
+    )
     return {
         "status": "ok",
 
         "base_model": BASE_MODEL,
 
         "supervisor": GROQ_MODEL,
+
+        "router_type": "rl" if (USE_RL_ROUTER and Path(router_checkpoint).exists()) else "keyword",
+
+        "router_checkpoint": router_checkpoint if Path(router_checkpoint).exists() else None,
 
         "device": str(
             model.device
@@ -121,29 +135,26 @@ async def classify_query(
         "unknown"
     ),
 ):
-
+    """
+    Lightweight classification endpoint — no image upload needed.
+    Uses keyword routing (RL router requires real image bytes).
+    """
     input_info = {
-
         "image_count": image_count,
-
         "modalities": modalities,
     }
 
     decision = call_groq_supervisor(
         query=query,
-
         input_info=input_info,
     )
 
     return {
-
         "query": query,
-
         "classes": decision.classes,
-
         "workflow": decision.workflow,
-
         "parameters": decision.parameters,
+        "router": decision.router,
     }
 
 
@@ -278,43 +289,55 @@ async def analyze(
 
 
     # ========================================================
-    # SUPERVISOR
+    # ROUTER  (RL or keyword fallback)
     # ========================================================
-
-    supervisor_input = {
-
-        "image_count":
-            len(decoded_images),
-
-        "modalities":
-            modalities,
-
-        "images":
-            image_metadata,
-    }
-
 
     supervisor_start = time.time()
 
+    if USE_RL_ROUTER:
+        # Write decoded PIL images to a temp directory so the RL feature
+        # encoder can open them from disk (it calls Image.open internally).
+        tmp_dir = tempfile.mkdtemp(prefix="satquery_router_")
+        tmp_image_paths: List[str] = []
+        modalities_list: List[str] = []
+        try:
+            for idx, (pil_img, meta) in enumerate(zip(decoded_images, image_metadata)):
+                suffix = meta["format"] if meta["format"] in {".png", ".jpg", ".jpeg", ".tif", ".tiff"} else ".png"
+                tmp_path = str(Path(tmp_dir) / f"img{idx}{suffix}")
+                pil_img.save(tmp_path)
+                tmp_image_paths.append(tmp_path)
+                modalities_list.append(modalities if len(decoded_images) == 1 else "optical")
 
-    decision = call_groq_supervisor(
-        query=query,
-
-        input_info=supervisor_input,
-    )
+            decision = route_with_rl(
+                query=query,
+                image_paths=tmp_image_paths,
+                modalities=modalities_list,
+            )
+        except Exception as exc:
+            logger.error("rl_router failed (%s), falling back to keyword", exc, exc_info=True)
+            decision = call_groq_supervisor(
+                query=query,
+                input_info={"image_count": len(decoded_images), "modalities": modalities},
+            )
+        finally:
+            # Clean up temp files
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+    else:
+        decision = call_groq_supervisor(
+            query=query,
+            input_info={"image_count": len(decoded_images), "modalities": modalities},
+        )
 
     logger.info(
-        "supervisor_decision classes=%s workflow=%s parameters=%s",
+        "router_decision router=%s classes=%s workflow=%s parameters=%s",
+        decision.router,
         decision.classes,
         decision.workflow,
         decision.parameters,
     )
 
-
-    supervisor_latency = (
-        time.time()
-        - supervisor_start
-    )
+    supervisor_latency = time.time() - supervisor_start
 
 
     # ========================================================
@@ -401,19 +424,22 @@ async def analyze(
 
             {
                 "role":
-                    "supervisor",
+                    "router",
+
+                "type":
+                    decision.router,
 
                 "provider":
-                    "Groq",
-
-                "model":
-                    GROQ_MODEL,
+                    "SatQuery RL" if decision.router == "rl" else "keyword-heuristic",
 
                 "latency_seconds":
                     round(
                         supervisor_latency,
                         3,
                     ),
+
+                "reasoning":
+                    decision.reasoning,
             },
 
             {
@@ -496,13 +522,34 @@ def run_cli_analysis(image_paths: List[str], query: str, modalities: str):
         validate_extension(path.name)
         decoded_images.append(load_image_bytes(path.read_bytes(), path.name))
 
-    decision = call_groq_supervisor(
-        query=query,
-        input_info={
-            "image_count": len(decoded_images),
-            "modalities": modalities,
-        },
-    )
+    if USE_RL_ROUTER:
+        tmp_dir = tempfile.mkdtemp(prefix="satquery_router_")
+        tmp_paths: List[str] = []
+        try:
+            for idx, (pil_img, img_path) in enumerate(zip(decoded_images, image_paths)):
+                suffix = Path(img_path).suffix or ".png"
+                tmp_p = str(Path(tmp_dir) / f"img{idx}{suffix}")
+                pil_img.save(tmp_p)
+                tmp_paths.append(tmp_p)
+            decision = route_with_rl(
+                query=query,
+                image_paths=tmp_paths,
+                modalities=[modalities] * len(decoded_images),
+            )
+        except Exception as exc:
+            logger.error("rl_router cli failed (%s), falling back", exc, exc_info=True)
+            decision = call_groq_supervisor(
+                query=query,
+                input_info={"image_count": len(decoded_images), "modalities": modalities},
+            )
+        finally:
+            import shutil
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+    else:
+        decision = call_groq_supervisor(
+            query=query,
+            input_info={"image_count": len(decoded_images), "modalities": modalities},
+        )
 
     execution = execute_workflow(
         classes=decision.classes,
@@ -516,6 +563,7 @@ def run_cli_analysis(image_paths: List[str], query: str, modalities: str):
         "tasks": execution["outputs"],
         "classes": decision.classes,
         "workflow": decision.workflow,
+        "router": decision.router,
     }
 
 

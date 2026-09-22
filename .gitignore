@@ -1,2 +1,8 @@
 backend/venv/
 backend/__pycache__/
+cdvqa_router_images/
+rsvqa_cached_images/
+satquery_cached_images/
+satquery_vrsbench_images/
+satquery_router.pt
+satquery_router_features.pt
