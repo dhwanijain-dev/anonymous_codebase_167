@@ -22,7 +22,7 @@ from fastapi import (
 )
 
 from supervisor import call_groq_supervisor
-from rl_router import route_with_rl
+from clf_router import route_with_clf
 
 from image_validation import (
     validate_extension,
@@ -63,10 +63,10 @@ USE_4BIT = (
     == "true"
 )
 
-# Whether to use the trained RL router (True) or the keyword heuristic (False).
-# Set SATQUERY_USE_RL_ROUTER=false to force keyword routing even when a
+# Whether to use the trained DL classifier (True) or the keyword heuristic (False).
+# Set SATQUERY_USE_CLF_ROUTER=false to force keyword routing even when a
 # checkpoint is present.
-USE_RL_ROUTER = os.getenv("SATQUERY_USE_RL_ROUTER", "true").lower() == "true"
+USE_CLF_ROUTER = os.getenv("SATQUERY_USE_CLF_ROUTER", "true").lower() == "true"
 
 
 # ============================================================
@@ -86,9 +86,9 @@ app = FastAPI(
 
 @app.get("/health")
 def health():
-    router_checkpoint = os.getenv(
-        "ROUTER_CHECKPOINT",
-        str(Path(__file__).parent / "satquery_router.pt"),
+    clf_checkpoint = os.getenv(
+        "CLASSIFIER_CHECKPOINT",
+        str(Path(__file__).parent / "satquery_clf.pt"),
     )
     return {
         "status": "ok",
@@ -97,9 +97,9 @@ def health():
 
         "supervisor": GROQ_MODEL,
 
-        "router_type": "rl" if (USE_RL_ROUTER and Path(router_checkpoint).exists()) else "keyword",
+        "router_type": "classifier" if (USE_CLF_ROUTER and Path(clf_checkpoint).exists()) else "keyword",
 
-        "router_checkpoint": router_checkpoint if Path(router_checkpoint).exists() else None,
+        "classifier_checkpoint": clf_checkpoint if Path(clf_checkpoint).exists() else None,
 
         "device": str(
             model.device
@@ -294,10 +294,10 @@ async def analyze(
 
     supervisor_start = time.time()
 
-    if USE_RL_ROUTER:
-        # Write decoded PIL images to a temp directory so the RL feature
-        # encoder can open them from disk (it calls Image.open internally).
-        tmp_dir = tempfile.mkdtemp(prefix="satquery_router_")
+    if USE_CLF_ROUTER:
+        # Write decoded PIL images to a temp directory so the classifier
+        # feature encoder can open them from disk (calls Image.open internally).
+        tmp_dir = tempfile.mkdtemp(prefix="satquery_clf_")
         tmp_image_paths: List[str] = []
         modalities_list: List[str] = []
         try:
@@ -308,13 +308,13 @@ async def analyze(
                 tmp_image_paths.append(tmp_path)
                 modalities_list.append(modalities if len(decoded_images) == 1 else "optical")
 
-            decision = route_with_rl(
+            decision = route_with_clf(
                 query=query,
                 image_paths=tmp_image_paths,
                 modalities=modalities_list,
             )
         except Exception as exc:
-            logger.error("rl_router failed (%s), falling back to keyword", exc, exc_info=True)
+            logger.error("clf_router failed (%s), falling back to keyword", exc, exc_info=True)
             decision = call_groq_supervisor(
                 query=query,
                 input_info={"image_count": len(decoded_images), "modalities": modalities},
@@ -334,7 +334,7 @@ async def analyze(
         decision.router,
         decision.classes,
         decision.workflow,
-        decision.parameters,
+        {k: v for k, v in decision.parameters.items() if k != "probabilities"},
     )
 
     supervisor_latency = time.time() - supervisor_start
@@ -430,7 +430,7 @@ async def analyze(
                     decision.router,
 
                 "provider":
-                    "SatQuery RL" if decision.router == "rl" else "keyword-heuristic",
+                    "SatQuery Classifier" if decision.router == "classifier" else "keyword-heuristic",
 
                 "latency_seconds":
                     round(
@@ -522,8 +522,8 @@ def run_cli_analysis(image_paths: List[str], query: str, modalities: str):
         validate_extension(path.name)
         decoded_images.append(load_image_bytes(path.read_bytes(), path.name))
 
-    if USE_RL_ROUTER:
-        tmp_dir = tempfile.mkdtemp(prefix="satquery_router_")
+    if USE_CLF_ROUTER:
+        tmp_dir = tempfile.mkdtemp(prefix="satquery_clf_")
         tmp_paths: List[str] = []
         try:
             for idx, (pil_img, img_path) in enumerate(zip(decoded_images, image_paths)):
@@ -531,13 +531,13 @@ def run_cli_analysis(image_paths: List[str], query: str, modalities: str):
                 tmp_p = str(Path(tmp_dir) / f"img{idx}{suffix}")
                 pil_img.save(tmp_p)
                 tmp_paths.append(tmp_p)
-            decision = route_with_rl(
+            decision = route_with_clf(
                 query=query,
                 image_paths=tmp_paths,
                 modalities=[modalities] * len(decoded_images),
             )
         except Exception as exc:
-            logger.error("rl_router cli failed (%s), falling back", exc, exc_info=True)
+            logger.error("clf_router cli failed (%s), falling back", exc, exc_info=True)
             decision = call_groq_supervisor(
                 query=query,
                 input_info={"image_count": len(decoded_images), "modalities": modalities},
