@@ -116,7 +116,8 @@ flowchart LR
 
 ### Target architecture narrative
 
-The final system will accept a question with one image or a compatible pair, validate image and pair metadata, and split large rasters into bounded windows. The router will select the relevant task; GPU workers will run the configured Qwen2.5-VL adapters and SARMAE path. The response will pair the answer with task outputs, visual evidence, confidence methodology, and an audit trace. **Proposed:** define the evidence contract and calibration procedure before pilot evaluation. Evaluation will use named public benchmarks and, subject to access, operational data partners identified by the deck.
+The final system will accept multiple images, validate image and pair metadata, and split large rasters into bounded windows. The router will select the relevant task; GPU workers will run the configured Qwen2.5-VL adapters. The response will pair the answer with task outputs, visual evidence, confidence methodology, and an audit trace. 
+**Proposed:** define the evidence contract and calibration procedure before pilot evaluation. Evaluation will use named public benchmarks and, subject to access, operational data partners identified by the deck.
 
 The deck names PostgreSQL and a VectorDB. **Proposed:** deploy a job queue and stateless GPU worker pool, store large inputs/results in object storage, and keep structured run metadata in PostgreSQL with the vector service for retrieval. This boundary would let the web/API tier scale separately from GPU inference; tile caching would reduce repeated raster work. The team should validate these choices against privacy, GPU cost, and pilot load before implementation.
 
