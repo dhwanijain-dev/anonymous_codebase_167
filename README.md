@@ -79,7 +79,7 @@ The proposal combines natural-language task routing with remote-sensing vision m
 2. **Bring specialist workflows behind one question interface.** The deck proposes VQA, captioning/grounding, bi-temporal change analysis, and optical–SAR fusion. Corresponding workflow branches and model configuration are present in source; backend execution remains a Phase 2 verification step.
 3. **Make results reviewable.** The API response construction includes task outputs and an execution trace, and the grounding path can return boxes/evidence. The final system will add a defined evidence contract and calibrated confidence so an analyst can inspect why an answer was produced.
 
-These are design differentiators from the SIH deck, not measured superiority claims over other systems. The current routing code does not make a Groq or other external LLM supervisor request.
+These are design differentiators from the SIH deck, not measured superiority claims over other systems.
 
 ## Target architecture
 
