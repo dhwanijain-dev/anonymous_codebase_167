@@ -1,6 +1,5 @@
-packages: []
+pmOnFail: ignore
 
-allowBuilds:
-  sharp: true
-  unrs-resolver: true
-  msw: false
+minimumReleaseAgeExclude:
+  - '@next/*'
+  - next

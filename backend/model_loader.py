@@ -1,6 +1,8 @@
 import os
 from dotenv import load_dotenv
-
+from huggingface_hub import snapshot_download
+from transformers import AutoConfig, AutoModel, AutoImageProcessor
+import torch 
 load_dotenv()
 
 # Hugging Face reads these settings during import, so configure them first.
@@ -43,7 +45,7 @@ BASE_MODEL = os.getenv(
 
 HF_MODEL_REPO1 = os.getenv(
     "HF_MODEL_REPO1",
-    "whrecker/qwen2.5-3b-vl-bigearthnet-txt-lora",
+    "whrecker/qwen2.5-3b-vl-rsvqa-hr-lora",
 )
 
 HF_MODEL_REPO2 = os.getenv(
@@ -230,27 +232,48 @@ print("✅ Optical-SAR adapter loaded")
 
 print("Loading SARMAE encoder for the optical-SAR adapter...")
 
+
+# Download the complete checkpoint, including custom modeling code.
+sar_repo_path = snapshot_download(
+    repo_id=SAR_ENCODER_ID,
+    allow_patterns=[
+        f"{SAR_ENCODER_SUBFOLDER}/*",
+    ],
+    token=HF_TOKEN4,
+)
+
+sar_model_path = os.path.join(
+    sar_repo_path,
+    SAR_ENCODER_SUBFOLDER,
+)
+
+print("SARMAE local path:", sar_model_path)
+
+# Load from the local directory instead of resolving the remote subfolder.
 sar_encoder = AutoModel.from_pretrained(
-    SAR_ENCODER_ID,
-    subfolder=SAR_ENCODER_SUBFOLDER,
+    sar_model_path,
     trust_remote_code=True,
     token=HF_TOKEN4,
 )
-sar_encoder = sar_encoder.to(model.device if hasattr(model, "device") else "cuda")
+
+device = model.device if hasattr(model, "device") else "cuda"
+
+sar_encoder = sar_encoder.to(device)
 sar_encoder.eval()
+
 for p in sar_encoder.parameters():
     p.requires_grad_(False)
 
 sar_image_processor = AutoImageProcessor.from_pretrained(
-    SAR_ENCODER_ID,
-    subfolder=SAR_ENCODER_SUBFOLDER,
+    sar_model_path,
     trust_remote_code=True,
     token=HF_TOKEN4,
 )
 
 sar_hidden_size = sar_encoder.config.hidden_size
-print("✅ SARMAE encoder loaded (hidden size:", sar_hidden_size, ")")
 
+print("✅ SARMAE encoder loaded")
+print("Hidden size:", sar_hidden_size)
 
 # --- Same attribute-discovery logic as the training notebook: reaches into
 #     model internals that aren't guaranteed-stable public API, tries
