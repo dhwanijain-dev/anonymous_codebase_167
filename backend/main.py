@@ -19,6 +19,7 @@ from fastapi import (
     Form,
     HTTPException,
 )
+from fastapi.middleware.cors import CORSMiddleware
 
 from supervisor import call_groq_supervisor
 
@@ -70,6 +71,22 @@ app = FastAPI(
     title="SatQuery AI",
     description="Agentic remote-sensing VLM backend",
     version="1.0.0",
+)
+
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "FRONTEND_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
+    ).split(",")
+    if origin.strip()
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=allowed_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 

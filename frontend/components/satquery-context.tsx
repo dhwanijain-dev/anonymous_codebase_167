@@ -2,6 +2,8 @@
 
 import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from 'react'
 
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'
+
 // =============================================================================
 // TYPES
 // =============================================================================
@@ -484,7 +486,7 @@ const submitQuery = useCallback(async () => {
       )
     })
 
-    const response = await fetch('http://localhost:8000/analyze', {
+    const response = await fetch(`${API_BASE_URL}/analyze`, {
       method: 'POST',
       body: form,
     })
